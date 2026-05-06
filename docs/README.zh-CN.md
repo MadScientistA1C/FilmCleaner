@@ -2,6 +2,8 @@
 
 [English README](../README.md)
 
+![LAMALocal 技术路线](Chinese.png)
+
 LAMALocal 是一个面向胶片扫描图像的本地灰尘与划痕清理工作流。  
 这个仓库包含模型训练脚本、推理工具、导出工具，以及用于 Lightroom 插件流程的打包辅助脚本。
 

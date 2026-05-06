@@ -5,6 +5,8 @@
 LAMALocal is a local workflow for dust and scratch removal on film scans.  
 This repository contains model training scripts, inference tools, export utilities, and packaging helpers for the Lightroom plugin workflow.
 
+![LAMALocal technical workflow](docs/English.png)
+
 ## What this project includes
 
 - DeepLab-based dust mask prediction
