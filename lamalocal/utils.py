@@ -2,7 +2,7 @@
 
 import torch
 import os
-from config import BEST_MODEL_PATH, LATEST_MODEL_PATH
+from lamalocal.config import BEST_MODEL_PATH, LATEST_MODEL_PATH
 
 def save_model(model, optimizer, epoch, best_metric, is_best=False):
     """

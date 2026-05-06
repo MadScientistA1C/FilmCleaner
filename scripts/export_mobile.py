@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from mobile_models import InpaintStudentNet, MobileUNetV3
+from lamalocal.mobile_models import InpaintStudentNet, MobileUNetV3
 
 
 def load_state(model, checkpoint_path, device):

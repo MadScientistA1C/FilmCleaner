@@ -6,10 +6,10 @@ import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from distill_data import FilmSegmentationPairs
-from losses import CombinedLoss
-from metrics import Metrics
-from utils import get_lr_scheduler
+from lamalocal.distill_data import FilmSegmentationPairs
+from lamalocal.losses import CombinedLoss
+from lamalocal.metrics import Metrics
+from lamalocal.utils import get_lr_scheduler
 
 
 def run_epoch(model, loader, criterion, optimizer, metrics, device, train=True):

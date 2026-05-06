@@ -7,11 +7,11 @@ import segmentation_models_pytorch as smp
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from config import IMAGES_DIR, MASKS_DIR
-from distill_data import FilmSegmentationPairs
-from losses import CombinedLoss
-from metrics import Metrics
-from mobile_models import MobileUNetV3
+from lamalocal.config import IMAGES_DIR, MASKS_DIR
+from lamalocal.distill_data import FilmSegmentationPairs
+from lamalocal.losses import CombinedLoss
+from lamalocal.metrics import Metrics
+from lamalocal.mobile_models import MobileUNetV3
 
 
 def load_teacher(path, device):

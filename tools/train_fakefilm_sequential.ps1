@@ -1,10 +1,11 @@
 $ErrorActionPreference = "Stop"
 
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ToolsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ToolsRoot
 Set-Location $Root
 
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
-$TrainScript = Join-Path $Root "train_deeplab_dataset.py"
+$TrainModule = "scripts.train_deeplab_dataset"
 $LogDir = Join-Path $Root "logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -21,7 +22,7 @@ function Invoke-Training {
 
     $Command = @(
         "`"$Python`"",
-        "`"$TrainScript`"",
+        "-m", $TrainModule,
         "--image-dir", "`"$ImageDir`"",
         "--mask-dir", "`"$MaskDir`"",
         "--output-prefix", "`"$OutputPrefix`"",

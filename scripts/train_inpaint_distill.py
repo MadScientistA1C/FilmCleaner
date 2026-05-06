@@ -6,9 +6,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from config import IMAGES_DIR, MASKS_DIR
-from distill_data import InpaintTeacherPairs
-from mobile_models import InpaintStudentNet
+from lamalocal.config import IMAGES_DIR, MASKS_DIR
+from lamalocal.distill_data import InpaintTeacherPairs
+from lamalocal.mobile_models import InpaintStudentNet
 
 
 def total_variation(x):

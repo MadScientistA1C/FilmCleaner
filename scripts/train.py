@@ -4,15 +4,15 @@ import torch
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 
-from config import (
+from lamalocal.config import (
     BATCH_SIZE, EPOCHS, LEARNING_RATE, WEIGHT_DECAY,
     USE_GPU, RESUME_TRAINING, NUM_WORKERS,
     BCE_WEIGHT, DICE_WEIGHT, THRESHOLD
 )
-from dataset import get_dataloaders
-from losses import CombinedLoss
-from metrics import Metrics
-from utils import save_model, load_model, get_lr_scheduler
+from lamalocal.dataset import get_dataloaders
+from lamalocal.losses import CombinedLoss
+from lamalocal.metrics import Metrics
+from lamalocal.utils import save_model, load_model, get_lr_scheduler
 
 def train_epoch(model, dataloader, criterion, optimizer, device):
     """

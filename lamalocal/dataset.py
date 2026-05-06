@@ -6,7 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import torch
 import torchvision.transforms as transforms
-from config import IMAGES_DIR, MASKS_DIR, IMAGE_SIZE, TRAIN_VAL_SPLIT
+from lamalocal.config import IMAGES_DIR, MASKS_DIR, IMAGE_SIZE, TRAIN_VAL_SPLIT
 
 class FilmDustDataset(Dataset):
     def __init__(self, image_files, mask_files, augment=False):
