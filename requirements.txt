@@ -1,0 +1,6 @@
+torch
+torchvision
+segmentation-models-pytorch
+Pillow
+numpy
+tqdm

@@ -1,0 +1,38 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.venv/
+venv/
+
+# IDE and local workspace state
+.idea/
+.vscode/
+
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Project-generated artifacts
+logs/
+outputs/
+checkpoints/
+model_cache/
+
+# Local datasets and large binary assets
+Dataset/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.tflite
+*.bin
+
+# OS and local scratch files
+Thumbs.db
+Desktop.ini
+1.txt
