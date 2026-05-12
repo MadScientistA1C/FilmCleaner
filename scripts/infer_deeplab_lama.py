@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import torch
 import segmentation_models_pytorch as smp
-from PIL import Image
+from PIL import Image, ImageEnhance
 from tqdm import tqdm
 from torchvision.transforms import functional as TF
 
@@ -74,7 +74,34 @@ def predict_tensor_prob(model, tensor, device):
         return torch.sigmoid(model(x))[0, 0].detach().cpu().numpy()
 
 
-def predict_patch_prob(model, patch, image_size, device, mask_enhance, tta):
+DEFAULT_TTA_TYPES = {"flip"}
+TTA_CHOICES = {"flip", "contrast", "gamma", "brightness", "rotate", "scale", "multiscale"}
+
+
+def normalize_tta_types(tta_types):
+    if tta_types is None:
+        return set(DEFAULT_TTA_TYPES)
+    if isinstance(tta_types, str):
+        return {item.strip() for item in tta_types.split(",") if item.strip()} & TTA_CHOICES
+    return set(tta_types) & TTA_CHOICES
+
+
+def apply_gamma(image, gamma):
+    arr = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+    arr = np.power(np.clip(arr, 0.0, 1.0), gamma)
+    return Image.fromarray(np.clip(arr * 255.0, 0, 255).astype(np.uint8))
+
+
+def resample_scale(image, scale):
+    width, height = image.size
+    scaled = image.resize(
+        (max(1, int(round(width * scale))), max(1, int(round(height * scale)))),
+        Image.BILINEAR,
+    )
+    return scaled.resize((width, height), Image.BILINEAR)
+
+
+def predict_patch_prob(model, patch, image_size, device, mask_enhance, tta, tta_types=None):
     orig_w, orig_h = patch.size
     if orig_w != image_size or orig_h != image_size:
         patch = patch.resize((image_size, image_size), Image.BILINEAR)
@@ -84,16 +111,44 @@ def predict_patch_prob(model, patch, image_size, device, mask_enhance, tta):
     if not tta:
         prob = predict_tensor_prob(model, tensor, device)
     else:
+        tta_types = normalize_tta_types(tta_types)
         probs = [predict_tensor_prob(model, tensor, device)]
 
-        prob_h = predict_tensor_prob(model, torch.flip(tensor, dims=[2]), device)
-        probs.append(np.flip(prob_h, axis=1).copy())
+        if "flip" in tta_types:
+            prob_h = predict_tensor_prob(model, torch.flip(tensor, dims=[2]), device)
+            probs.append(np.flip(prob_h, axis=1).copy())
 
-        prob_v = predict_tensor_prob(model, torch.flip(tensor, dims=[1]), device)
-        probs.append(np.flip(prob_v, axis=0).copy())
+            prob_v = predict_tensor_prob(model, torch.flip(tensor, dims=[1]), device)
+            probs.append(np.flip(prob_v, axis=0).copy())
 
-        prob_hv = predict_tensor_prob(model, torch.flip(tensor, dims=[1, 2]), device)
-        probs.append(np.flip(np.flip(prob_hv, axis=0), axis=1).copy())
+            prob_hv = predict_tensor_prob(model, torch.flip(tensor, dims=[1, 2]), device)
+            probs.append(np.flip(np.flip(prob_hv, axis=0), axis=1).copy())
+
+        if "contrast" in tta_types:
+            for factor in (0.9, 1.1):
+                probs.append(predict_tensor_prob(model, TF.to_tensor(ImageEnhance.Contrast(patch).enhance(factor)), device))
+
+        if "gamma" in tta_types:
+            for gamma in (0.9, 1.1):
+                probs.append(predict_tensor_prob(model, TF.to_tensor(apply_gamma(patch, gamma)), device))
+
+        if "brightness" in tta_types:
+            for factor in (0.95, 1.05):
+                probs.append(predict_tensor_prob(model, TF.to_tensor(ImageEnhance.Brightness(patch).enhance(factor)), device))
+
+        if "rotate" in tta_types:
+            for k in (1, 2, 3):
+                rotated = patch.rotate(90 * k, expand=False)
+                prob_rot = predict_tensor_prob(model, TF.to_tensor(rotated), device)
+                probs.append(np.rot90(prob_rot, -k).copy())
+
+        if "scale" in tta_types:
+            for scale in (0.9, 1.1):
+                probs.append(predict_tensor_prob(model, TF.to_tensor(resample_scale(patch, scale)), device))
+
+        if "multiscale" in tta_types:
+            for scale in (1.25, 1.5):
+                probs.append(predict_tensor_prob(model, TF.to_tensor(resample_scale(patch, scale)), device))
 
         prob = np.mean(probs, axis=0)
 
@@ -124,12 +179,17 @@ def predict_mask_tiled(
     dilate,
     mask_enhance,
     tta,
+    tta_types,
     device,
+    progress_callback=None,
+    stage_callback=None,
 ):
     width, height = image.size
     if tile_size <= 0:
-        prob = predict_patch_prob(model, image, image_size, device, mask_enhance, tta)
-        return finalize_mask(prob, threshold, close, component_expand, dilate)
+        prob = predict_patch_prob(model, image, image_size, device, mask_enhance, tta, tta_types)
+        if progress_callback:
+            progress_callback(1, 1)
+        return finalize_mask(prob, threshold, close, component_expand, dilate, stage_callback)
 
     if tile_overlap < 0 or tile_overlap >= tile_size:
         raise ValueError("--tile-overlap must be >= 0 and < --tile-size")
@@ -140,51 +200,62 @@ def predict_mask_tiled(
 
     xs = tile_starts(width, tile_size, stride)
     ys = tile_starts(height, tile_size, stride)
+    total_tiles = len(xs) * len(ys)
+    done_tiles = 0
 
     for y in ys:
         for x in xs:
             right = min(x + tile_size, width)
             bottom = min(y + tile_size, height)
             patch = image.crop((x, y, right, bottom))
-            patch_prob = predict_patch_prob(model, patch, image_size, device, mask_enhance, tta)
+            patch_prob = predict_patch_prob(model, patch, image_size, device, mask_enhance, tta, tta_types)
             prob_sum[y:bottom, x:right] += patch_prob
             weight_sum[y:bottom, x:right] += 1.0
+            done_tiles += 1
+            if progress_callback:
+                progress_callback(done_tiles, total_tiles)
 
+    if stage_callback:
+        stage_callback(72, "正在合并滑窗预测结果")
     prob = prob_sum / np.maximum(weight_sum, 1e-6)
-    return finalize_mask(prob, threshold, close, component_expand, dilate)
+    return finalize_mask(prob, threshold, close, component_expand, dilate, stage_callback)
 
 
-def finalize_mask(prob, threshold, close, component_expand, dilate):
+def finalize_mask(prob, threshold, close, component_expand, dilate, stage_callback=None):
+    if stage_callback:
+        stage_callback(73, "正在按阈值生成灰尘遮罩")
     mask = (prob >= threshold).astype(np.uint8) * 255
 
     if close > 0:
+        if stage_callback:
+            stage_callback(74, "正在连接断裂的灰尘区域")
         kernel_size = close * 2 + 1
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
 
     if component_expand > 0:
-        mask = expand_connected_components(mask, component_expand)
+        if stage_callback:
+            stage_callback(75, "正在扩展每个灰尘连通区域")
+        mask = expand_connected_components(mask, component_expand, stage_callback)
 
     if dilate > 0:
+        if stage_callback:
+            stage_callback(80, "正在执行最终遮罩膨胀")
         kernel_size = dilate * 2 + 1
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
         mask = cv2.dilate(mask, kernel, iterations=1)
 
+    if stage_callback:
+        stage_callback(81, "灰尘遮罩后处理完成")
     return mask
 
 
-def expand_connected_components(mask, radius):
-    num_labels, labels = cv2.connectedComponents((mask > 0).astype(np.uint8), connectivity=8)
-    expanded = np.zeros_like(mask, dtype=np.uint8)
+def expand_connected_components(mask, radius, stage_callback=None):
     kernel_size = radius * 2 + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-
-    for label in range(1, num_labels):
-        component = (labels == label).astype(np.uint8) * 255
-        component = cv2.dilate(component, kernel, iterations=1)
-        expanded = np.maximum(expanded, component)
-
-    return expanded
+    if stage_callback:
+        stage_callback(77, "正在扩展灰尘连通区域")
+    return cv2.dilate(mask, kernel, iterations=1)
 
 
 def load_lama(lama_checkpoint, device):
@@ -258,8 +329,9 @@ def parse_args():
     parser.add_argument("--close", type=int, default=3, help="Morphological close radius to fill small gaps in dust masks.")
     parser.add_argument("--component-expand", type=int, default=10, help="Expand each connected dust component before LaMa.")
     parser.add_argument("--dilate", type=int, default=0, help="Extra global mask dilation radius after component expansion.")
-    parser.add_argument("--mask-enhance", choices=["none", "clahe", "sharpen", "clahe_sharpen", "highpass"], default="none", help="Enhance only the mask predictor input.")
+    parser.add_argument("--mask-enhance", choices=["none", "sharpen"], default="none", help="Enhance only the mask predictor input.")
     parser.add_argument("--tta", action="store_true", help="Average mask predictions over flip test-time augmentation.")
+    parser.add_argument("--tta-types", default="flip", help="Comma-separated TTA types: flip,contrast,gamma,brightness,rotate,scale,multiscale.")
     parser.add_argument("--lama-hd-strategy", choices=["original", "crop", "resize"], default="crop")
     parser.add_argument("--lama-crop-trigger-size", type=int, default=800)
     parser.add_argument("--lama-crop-margin", type=int, default=128)
@@ -309,6 +381,7 @@ def main():
             args.dilate,
             args.mask_enhance,
             args.tta,
+            args.tta_types,
             device,
         )
         result = run_lama(

@@ -37,3 +37,5 @@ Thumbs.db
 Desktop.ini
 1.txt
 *.log
+/.venv_cpu/
+/.tmp/

@@ -81,6 +81,29 @@ The `tools/` directory contains helper scripts for repeated local workflows:
 .\tools\build_lightroom.ps1
 ```
 
+## Build the Windows web package
+
+Build a one-click Windows web app package:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pyinstaller
+.\tools\build_windows_web.ps1 -Clean -Zip
+```
+
+Build a smaller CPU-only package:
+
+```powershell
+.\tools\build_windows_web_cpu.ps1 -Clean -Zip
+```
+
+Output location:
+
+- `dist\LAMALocalWeb\Start LAMALocal Web.bat`
+- optional zip: `dist\LAMALocalWeb.zip`
+- CPU-only zip: `dist\LAMALocalWeb-CPU.zip`
+
+When launched, the package detects `nvidia-smi` and lets the user choose Auto, GPU/CUDA, or CPU mode before opening the local browser UI.
+
 ## Build the Lightroom plugin
 
 This repository includes a Lightroom plugin packaging workflow.
